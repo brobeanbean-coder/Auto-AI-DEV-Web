@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // 설정값
 const WEBSITE_TYPES = ["쇼핑몰","포트폴리오","랜딩페이지","블로그","회사 소개","예약/예매 사이트","SaaS 대시보드","커뮤니티/포럼"];
@@ -42,6 +42,25 @@ export default function Home() {
   const [codeTab, setCodeTab] = useState<"preview"|"html"|"css"|"js">("preview");
   const [currentStage, setCurrentStage] = useState("");
   const [currentRound, setCurrentRound] = useState(0);
+
+  // API 상태
+  type ApiStatus = "loading" | "connected" | "error" | "not_set";
+  const [apiStatus, setApiStatus] = useState<{ google: ApiStatus; openai: ApiStatus; anthropic: ApiStatus }>({
+    google: "loading", openai: "loading", anthropic: "loading",
+  });
+
+  useEffect(() => {
+    fetch("/api/status").then(r => r.json()).then(data => {
+      setApiStatus(data);
+    }).catch(() => {
+      setApiStatus({ google: "error", openai: "error", anthropic: "error" });
+    });
+  }, []);
+
+  const statusColor = (s: ApiStatus) =>
+    s === "connected" ? "var(--success)" : s === "error" ? "var(--error)" : s === "not_set" ? "var(--warning)" : "var(--text-muted)";
+  const statusLabel = (s: ApiStatus) =>
+    s === "connected" ? "연결됨" : s === "error" ? "오류" : s === "not_set" ? "미입력" : "확인 중...";
 
   // 기존 개선 모드 state
   const [improveUrl, setImproveUrl] = useState("");
@@ -166,6 +185,26 @@ export default function Home() {
             <input type="checkbox" checked={!form.freeMode} onChange={e=>setForm({...form,freeMode:!e.target.checked})} />
             <span className="slider" />
           </label>
+        </div>
+
+        <div className="divider" />
+        <h3>API 상태</h3>
+        <div className="api-lights">
+          <div className="api-light-row">
+            <span className="api-dot" style={{background: statusColor(apiStatus.google)}} />
+            <span className="api-name">Google (Gemini)</span>
+            <span className="api-status-text" style={{color: statusColor(apiStatus.google)}}>{statusLabel(apiStatus.google)}</span>
+          </div>
+          <div className="api-light-row">
+            <span className="api-dot" style={{background: statusColor(apiStatus.openai)}} />
+            <span className="api-name">OpenAI (GPT)</span>
+            <span className="api-status-text" style={{color: statusColor(apiStatus.openai)}}>{statusLabel(apiStatus.openai)}</span>
+          </div>
+          <div className="api-light-row">
+            <span className="api-dot" style={{background: statusColor(apiStatus.anthropic)}} />
+            <span className="api-name">Anthropic (Claude)</span>
+            <span className="api-status-text" style={{color: statusColor(apiStatus.anthropic)}}>{statusLabel(apiStatus.anthropic)}</span>
+          </div>
         </div>
 
         <div className="divider" />

@@ -215,6 +215,39 @@ body {
   cursor: pointer; background: none;
 }
 
+/* API status lights */
+.api-lights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.api-light-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.api-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.api-name {
+  flex: 1;
+  color: var(--text-muted);
+}
+.api-status-text {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 /* Mode toggle switch */
 .mode-toggle {
   display: flex;
