@@ -54,7 +54,7 @@ export default function Home() {
     projectName: "",
     websiteType: "쇼핑몰",
     designStyle: "미니멀",
-    primaryColor: "#4F46E5",
+    primaryColor: "#03C75A",
     secondaryColor: "#10B981",
     pages: [...TYPE_PAGES["쇼핑몰"]] as string[],
     features: [...TYPE_FEATURES["쇼핑몰"]] as string[],
