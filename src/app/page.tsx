@@ -34,6 +34,7 @@ type LogEntry = { agent: string; stage: string; message: string; round: number }
 type CodeResult = { html: string; css: string; js: string };
 
 export default function Home() {
+  const [mainMode, setMainMode] = useState<"new"|"improve">("new");
   const [activeTab, setActiveTab] = useState<"input"|"monitor"|"result">("input");
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -41,6 +42,12 @@ export default function Home() {
   const [codeTab, setCodeTab] = useState<"preview"|"html"|"css"|"js">("preview");
   const [currentStage, setCurrentStage] = useState("");
   const [currentRound, setCurrentRound] = useState(0);
+
+  // 기존 개선 모드 state
+  const [improveUrl, setImproveUrl] = useState("");
+  const [improveHtml, setImproveHtml] = useState("");
+  const [improveFocus, setImproveFocus] = useState<string[]>([]);
+  const [improveNotes, setImproveNotes] = useState("");
 
   // Form state
   const [form, setForm] = useState({
@@ -55,25 +62,41 @@ export default function Home() {
     additionalNotes: "",
     autoApprove: true,
     maxRounds: 3,
+    freeMode: true,
   });
 
   const toggleArrayItem = (arr: string[], item: string) =>
     arr.includes(item) ? arr.filter(x => x !== item) : [...arr, item];
 
   const handleSubmit = async () => {
-    if (!form.projectName) { alert("프로젝트 이름을 입력해주세요!"); return; }
+    if (mainMode === "new" && !form.projectName) { alert("프로젝트 이름을 입력해주세요!"); return; }
+    if (mainMode === "improve" && !improveHtml.trim() && !improveUrl.trim()) { alert("개선할 웹사이트 URL 또는 HTML 코드를 입력해주세요!"); return; }
+
     setLoading(true);
     setLogs([]);
     setCode(null);
     setActiveTab("monitor");
-    setCurrentStage("planning");
+    setCurrentStage(mainMode === "new" ? "planning" : "analyzing");
     setCurrentRound(1);
 
     try {
-      const res = await fetch("/api/build", {
+      const endpoint = mainMode === "new" ? "/api/build" : "/api/improve";
+      const body = mainMode === "new"
+        ? form
+        : {
+            url: improveUrl,
+            htmlCode: improveHtml,
+            focusAreas: improveFocus,
+            additionalNotes: improveNotes,
+            autoApprove: form.autoApprove,
+            maxRounds: form.maxRounds,
+            freeMode: form.freeMode,
+          };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
 
@@ -93,6 +116,7 @@ export default function Home() {
 
   const agentIcon = (agent: string) => {
     if (agent === "Planner") return "🧠";
+    if (agent === "Analyzer") return "🔬";
     if (agent === "Developer") return "💻";
     if (agent === "Reviewer") return "🔍";
     return "⚙️";
@@ -100,13 +124,22 @@ export default function Home() {
 
   const agentClass = (agent: string) => {
     if (agent === "Planner") return "planner";
+    if (agent === "Analyzer") return "planner";
     if (agent === "Developer") return "developer";
     if (agent === "Reviewer") return "reviewer";
     return "system";
   };
 
-  const stageIdx = (s: string) =>
-    s === "planning" ? 0 : s === "developing" ? 1 : s === "reviewing" ? 2 : s === "complete" ? 4 : 3;
+  const stageIdx = (s: string) => {
+    if (mainMode === "improve") {
+      if (s === "analyzing") return 0;
+      if (s === "developing") return 1;
+      if (s === "reviewing") return 2;
+      if (s === "complete") return 4;
+      return 3;
+    }
+    return s === "planning" ? 0 : s === "developing" ? 1 : s === "reviewing" ? 2 : s === "complete" ? 4 : 3;
+  };
 
   const combinedHtml = code ? (() => {
     let h = code.html;
@@ -121,13 +154,38 @@ export default function Home() {
       <aside className="sidebar">
         <h3>⚙️ 설정</h3>
         <div className="divider" />
+
+        <div className="mode-toggle">
+          <div className="mode-label">
+            <span>{form.freeMode ? "🆓 무료 모드" : "💎 프로 모드"}</span>
+            <small style={{display:"block",color:"var(--text-muted)",fontSize:"0.65rem",marginTop:2}}>
+              {form.freeMode ? "Google API 키만 필요" : "GPT + Claude + Gemini 키 필요"}
+            </small>
+          </div>
+          <label className="switch">
+            <input type="checkbox" checked={!form.freeMode} onChange={e=>setForm({...form,freeMode:!e.target.checked})} />
+            <span className="slider" />
+          </label>
+        </div>
+
+        <div className="divider" />
         <h3>에이전트 구성</h3>
         <table className="agent-table">
           <thead><tr><th>역할</th><th>AI</th><th>모델</th></tr></thead>
           <tbody>
-            <tr><td>🧠 기획</td><td>GPT</td><td>gpt-4o</td></tr>
-            <tr><td>💻 개발</td><td>Claude</td><td>claude-sonnet</td></tr>
-            <tr><td>🔍 리뷰</td><td>Gemini</td><td>gemini-2.5-pro</td></tr>
+            {form.freeMode ? (
+              <>
+                <tr><td>🧠 기획</td><td>Gemini</td><td>2.0-flash</td></tr>
+                <tr><td>💻 개발</td><td>Gemini</td><td>2.5-pro</td></tr>
+                <tr><td>🔍 리뷰</td><td>Gemini</td><td>2.0-flash</td></tr>
+              </>
+            ) : (
+              <>
+                <tr><td>🧠 기획</td><td>GPT</td><td>gpt-4o</td></tr>
+                <tr><td>💻 개발</td><td>Claude</td><td>claude-sonnet</td></tr>
+                <tr><td>🔍 리뷰</td><td>Gemini</td><td>gemini-2.5-pro</td></tr>
+              </>
+            )}
           </tbody>
         </table>
         <div className="divider" />
@@ -138,17 +196,34 @@ export default function Home() {
       <main className="main-content">
         <div className="header">
           <h1>🤖 Auto AI DEV</h1>
-          <p>GPT · Claude · Gemini가 토론하며 자동으로 웹사이트를 만들어 줍니다</p>
+          <p>{form.freeMode
+            ? "Gemini가 기획·개발·리뷰를 자동으로 진행합니다 (무료)"
+            : "GPT · Claude · Gemini가 토론하며 자동으로 웹사이트를 만들어 줍니다"
+          }</p>
+        </div>
+
+        {/* Main Mode Menu */}
+        <div className="main-menu">
+          <button className={`main-menu-btn ${mainMode==="new"?"active":""}`} onClick={()=>{setMainMode("new");setActiveTab("input")}}>
+            <span className="menu-icon">🚀</span>
+            <span className="menu-label">새로 개발</span>
+            <span className="menu-desc">요구사항 입력 → AI 토론 → 웹사이트 자동 생성</span>
+          </button>
+          <button className={`main-menu-btn ${mainMode==="improve"?"active":""}`} onClick={()=>{setMainMode("improve");setActiveTab("input")}}>
+            <span className="menu-icon">🔧</span>
+            <span className="menu-label">기존 개선</span>
+            <span className="menu-desc">기존 웹사이트 분석 → AI 토론 → 개선 코드 생성</span>
+          </button>
         </div>
 
         <div className="tabs">
-          <button className={`tab ${activeTab==="input"?"active":""}`} onClick={()=>setActiveTab("input")}>📝 요구사항 입력</button>
+          <button className={`tab ${activeTab==="input"?"active":""}`} onClick={()=>setActiveTab("input")}>📝 {mainMode==="new"?"요구사항 입력":"개선 대상 입력"}</button>
           <button className={`tab ${activeTab==="monitor"?"active":""}`} onClick={()=>setActiveTab("monitor")}>📡 실시간 모니터링</button>
           <button className={`tab ${activeTab==="result"?"active":""}`} onClick={()=>setActiveTab("result")}>🎉 결과물</button>
         </div>
 
-        {/* Tab: Input */}
-        {activeTab === "input" && (
+        {/* Tab: Input — 새로 개발 */}
+        {activeTab === "input" && mainMode === "new" && (
           <>
             <div className="form-section">
               <h3>1. 기본 정보</h3>
@@ -251,6 +326,77 @@ export default function Home() {
           </>
         )}
 
+        {/* Tab: Input — 기존 개선 */}
+        {activeTab === "input" && mainMode === "improve" && (
+          <>
+            <div className="form-section">
+              <h3>1. 개선할 웹사이트</h3>
+              <div className="form-group">
+                <label>웹사이트 URL</label>
+                <input placeholder="https://your-website.com" value={improveUrl} onChange={e=>setImproveUrl(e.target.value)} />
+                <small style={{color:"var(--text-muted)",fontSize:"0.75rem"}}>URL 입력 시 자동으로 HTML을 가져옵니다</small>
+              </div>
+              <div className="form-group" style={{marginTop:"1rem"}}>
+                <label>또는 HTML 코드 직접 입력</label>
+                <textarea
+                  placeholder={"<!DOCTYPE html>\n<html>\n<head>...</head>\n<body>...</body>\n</html>"}
+                  value={improveHtml}
+                  onChange={e=>setImproveHtml(e.target.value)}
+                  style={{minHeight:180,fontFamily:"'Fira Code',monospace",fontSize:"0.8rem"}}
+                />
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3>2. 개선 초점 영역 <span style={{fontSize:"0.8rem",color:"var(--text-muted)",fontWeight:400}}>— 여러 개 선택 가능</span></h3>
+              <div className="checkbox-grid">
+                {[
+                  "디자인/UI 개선","반응형 (모바일 대응)","성능 최적화","접근성 (a11y)",
+                  "SEO 개선","코드 품질/리팩토링","애니메이션/인터랙션","다크모드 추가",
+                  "폰트/타이포그래피","색상/테마 변경","레이아웃 재구성","컴포넌트 분리"
+                ].map(area=>(
+                  <label key={area} className="checkbox-item">
+                    <input type="checkbox" checked={improveFocus.includes(area)}
+                      onChange={()=>setImproveFocus(toggleArrayItem(improveFocus,area))} />
+                    {area}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3>3. 추가 요구사항</h3>
+              <div className="form-group">
+                <label>구체적으로 개선하고 싶은 점을 작성해 주세요</label>
+                <textarea
+                  placeholder="예: 헤더 네비게이션이 모바일에서 깨짐, 로딩 속도가 느림, 전체적으로 촌스러운 디자인을 모던하게..."
+                  value={improveNotes}
+                  onChange={e=>setImproveNotes(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="form-section">
+              <h3>4. 실행 설정</h3>
+              <div className="toggle-row">
+                <div>
+                  <label>자동 허용 모드 (Auto-Approve)</label>
+                  <small>ON: AI끼리 자동으로 분석→개선→검토→완성</small>
+                </div>
+                <input type="checkbox" checked={form.autoApprove} onChange={e=>setForm({...form,autoApprove:e.target.checked})} style={{width:20,height:20,accentColor:"var(--primary)"}} />
+              </div>
+              <div className="form-group" style={{marginTop:"1rem"}}>
+                <label>최대 토론 반복 횟수: {form.maxRounds}회</label>
+                <input type="range" min={1} max={10} value={form.maxRounds} onChange={e=>setForm({...form,maxRounds:+e.target.value})} style={{accentColor:"var(--primary)"}} />
+              </div>
+            </div>
+
+            <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
+              {loading ? "AI들이 분석·개선 중..." : "🔧 개선 시작"}
+            </button>
+          </>
+        )}
+
         {/* Tab: Monitor */}
         {activeTab === "monitor" && (
           <>
@@ -258,7 +404,7 @@ export default function Home() {
               <div className="progress-fill" style={{width:`${Math.min(stageIdx(currentStage)/4*100,100)}%`}} />
             </div>
             <div className="stages">
-              {["기획","개발","리뷰","완성"].map((s,i)=>(
+              {(mainMode === "improve" ? ["분석","개선","검토","완성"] : ["기획","개발","리뷰","완성"]).map((s,i)=>(
                 <span key={s} className={stageIdx(currentStage)>i?"done":stageIdx(currentStage)===i?"active":""}>{s}</span>
               ))}
             </div>
